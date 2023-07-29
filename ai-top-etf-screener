@@ -1,0 +1,121 @@
+
+# Identify the performance of top ETF funds over this year so far using Yahoo Finance APIs.
+
+import yfinance as yf
+import pandas as pd
+from datetime import datetime, timedelta
+
+def get_historical_prices(ticker, start_date, end_date):
+    """
+    Fetch historical price data for a given ticker from Yahoo Finance.
+    """
+    ticker_data = yf.download(ticker, start=start_date, end=end_date)
+    return ticker_data['Adj Close']
+
+def calculate_price_change(prices, start_date):
+    """
+    Calculate price change from a specific start date to today.
+    """
+    return (prices.iloc[-1] - prices.loc[start_date]) / prices.loc[start_date] * 100
+
+def get_last_business_day(today):
+    """
+    Get the date of the last business day (excluding weekends and holidays) before the given date.
+    """
+    # Get the previous day.
+    previous_day = today - timedelta(days=1)
+    
+    # Keep going back one day until we find a non-weekend day.
+    while previous_day.weekday() >= 5:  # Saturday = 5, Sunday = 6
+        previous_day = previous_day - timedelta(days=1)
+    
+    return previous_day
+
+def get_first_business_day_of_month(today):
+    """
+    Get the date of the first business day (excluding weekends and holidays) of the current month.
+    """
+    first_day_of_month = today.replace(day=1)
+    
+    # Keep going forward one day until we find a non-weekend day.
+    while first_day_of_month.weekday() >= 5:  # Saturday = 5, Sunday = 6
+        first_day_of_month = first_day_of_month + timedelta(days=1)
+    
+    return first_day_of_month
+
+def get_stock_info(ticker):
+    """
+    Fetch stock name, supply, and demand data for a given ticker from Yahoo Finance.
+    """
+    stock_info = yf.Ticker(ticker)
+    stock_name = stock_info.info.get('longName', '')
+    supply = stock_info.info.get('sharesOutstanding', '')
+    demand = stock_info.info.get('regularMarketVolume', '')
+    return stock_name, supply, demand
+
+if __name__ == "__main__":
+    # Replace tickers_list with the list of tickers you want to analyze.
+    #tickers_list = ['AAPL', 'MSFT', 'GOOGL']
+    tickers_list = ['XNTK',	'XLK',	'XLC',	'XHB',	'XITK',	'XSD',	'XLY',	'EDIV',	'XTN',	'XWEB',	'XSW',	'HAIL',	'SPYG',	'FEZ',	'EFIV',	'SPYX',	'SPLG',	'SPY',	'SPTM',	'NZAC',	'KCE',	'KOMP',	'DGT',	'SPGM',	'SPEU',	'SHE',	'QUS',	'EFAX',	'SPYV',	'QWLD',	'XES',	'SPDW',	'MMTM',	'XLSR',	'SIMS',	'QEFA',	'MDYG',	'FITE',	'CWI',	'DWX',	'XLI',	'EWX',	'SPMD',	'MDY',	'CWB',	'XAR',	'XRT',	'VLU',	'MDYV']
+
+
+    # Get the date range for the last three months, last business day, and first business day of the current month.
+    end_date = datetime.today()
+    three_months_ago = end_date - timedelta(days=90)
+    yesterday_date = end_date - timedelta(days=1)
+    week_change = end_date - timedelta(days = 7)
+    last_business_day = get_last_business_day(end_date)
+    first_business_day_of_month = get_first_business_day_of_month(end_date)
+
+    ytd_start_date = end_date.replace(month=1, day=1)
+
+
+    # Create a DataFrame to store the output.
+    df_columns = ['Ticker', 'Stock Name', 'Year to Date Change', 'Quarter-to-End Change', 'Last Business Day to Today Change', 'First Business Day of Month to Today Change']
+    date_range = pd.date_range(start=three_months_ago, end=end_date)
+    date_range = date_range[::-1]  # Reverse the date range to put the latest date first
+    df_columns.extend(date_range.strftime('%m/%d'))  # Format datetime stamps to MM/DD
+    df = pd.DataFrame(columns=df_columns)
+
+    for ticker in tickers_list:
+        # Fetch historical prices for the ticker for the last three months.
+        prices = get_historical_prices(ticker, three_months_ago, end_date)
+
+        # Calculate quarter-to-end price change.
+        quarter_to_end_change = calculate_price_change(prices, prices.index[0])
+
+        last_business_day_to_today_change = get_historical_prices(ticker, last_business_day, end_date)
+        last_business_day_to_today_change = calculate_price_change(last_business_day_to_today_change, last_business_day_to_today_change.index[0])
+
+
+        first_business_day_to_today_change = get_historical_prices(ticker, first_business_day_of_month, end_date)
+        first_business_day_to_today_change = calculate_price_change(first_business_day_to_today_change, first_business_day_to_today_change.index[0])
+
+        ytd_price_change = get_historical_prices(ticker, ytd_start_date, end_date)
+        ytd_price_change = calculate_price_change(ytd_price_change, ytd_price_change.index[0])
+
+        stock_name, supply, demand = get_stock_info(ticker)
+
+
+        # Calculate last business day to today price change.
+        #last_business_day_to_today_change = calculate_price_change(prices, last_business_day)
+
+        # Calculate first business day of the current month to today price change.
+        #first_business_day_to_today_change = calculate_price_change(prices, first_business_day_of_month)
+
+        # Prepare the row data for the DataFrame.
+        row_data = {'Ticker': ticker,
+                    'Stock Name': stock_name,
+                    'Year to Date Change': ytd_price_change,
+                    'Quarter-to-End Change': quarter_to_end_change,
+                    'Last Business Day to Today Change': last_business_day_to_today_change,
+                    'First Business Day of Month to Today Change': first_business_day_to_today_change}
+
+        # Add daily prices to the row_data dictionary.
+        for date, price in prices.iteritems():
+            row_data[date.strftime('%m/%d')] = price  # Format datetime stamps to MM/DD
+
+        # Append data to the DataFrame.
+        df = df.append(row_data, ignore_index=True)
+
+    df.to_csv("Top ETF Tickers.csv")
